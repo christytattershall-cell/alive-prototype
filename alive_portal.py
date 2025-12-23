@@ -60,28 +60,31 @@ if mode == "File Upload (Full Proof)":
 
     if uploaded_file is not None and pasted_text:
         try:
+            # Load JSON data
             raw_data = json.load(uploaded_file)
+            
             jitter = raw_data.get("jitter_data", [])
             saved_hash = raw_data.get("content_hash", "")
             timestamp = raw_data.get("timestamp", "Unknown")
             
-            current_hash = hashlib.sha256(pasted_text.strip().encode('utf-8')).hexdigest()
+            # --- THE TIMESTAMP LOCK VERIFICATION ---
+            # We must combine text + timestamp to verify the fingerprint
+            combined_to_verify = f"{pasted_text.strip()}{timestamp}"
+            current_hash = hashlib.sha256(combined_to_verify.encode('utf-8')).hexdigest()
             
             st.divider()
             
             # --- CALCULATE SCORES ---
-            hash_match = current_hash == saved_hash
+            hash_match = (current_hash == saved_hash)
             variation = statistics.stdev(jitter) if len(jitter) > 10 else 0
-            
-            # Adjusted multiplier for better sensitivity
             score = min(100, int(variation * 500))
             
-            # New thresholds: 60+ is Human, 80+ is High Confidence
+            # Threshold lowered to 60 for better real-world human detection
             human_verified = score >= 60 
 
             # --- VERDICT LOGIC ---
             if not hash_match:
-                st.error("🚨 CRITICAL ERROR: CONTENT TAMPERED. The text does not match this receipt.")
+                st.error("🚨 CRITICAL ERROR: CONTENT TAMPERED or TIMESTAMP MISMATCH. This text does not match the digital seal.")
             elif not human_verified:
                 st.warning(f"⚠️ LOW CONFIDENCE: Biological jitter ({score}%) is below the human threshold.")
             else:
@@ -91,18 +94,18 @@ if mode == "File Upload (Full Proof)":
             # --- VERIFICATION SUMMARY TABLE ---
             st.write("### 📋 Verification Summary")
             summary_data = {
-                "Security Check": ["Content Integrity", "Biometric Jitter", "Fingerprint Match", "Timestamp"],
+                "Security Check": ["Content Integrity", "Biometric Jitter", "Fingerprint Match", "Timestamp Lock"],
                 "Result": [
                     "PASSED" if hash_match else "FAILED",
                     f"{score}% Confidence",
                     f"Match ({saved_hash[:6]})" if hash_match else "MISMATCH",
-                    timestamp
+                    f"SECURE: {timestamp}"
                 ],
                 "Status": [
                     "✅" if hash_match else "❌", 
                     "✅" if human_verified else "⚠️", 
                     "✅" if hash_match else "❌", 
-                    "ℹ️"
+                    "🔒"
                 ]
             }
             st.table(pd.DataFrame(summary_data))
@@ -125,24 +128,32 @@ if mode == "File Upload (Full Proof)":
             st.error(f"Error parsing file: {e}")
 
 else:
-    # --- ID LOOKUP MODE (Manual Fingerprint Check) ---
-    st.info("Enter the ALIVE ID and the text content to verify legitimacy.")
+    # --- ID LOOKUP MODE ---
+    st.info("Quick Check Mode: Paste text and ID. (Note: Requires exact timestamp if locked)")
     
     lookup_id = st.text_input("Enter ALIVE ID (e.g., 94-H-a1b2c3-2025):")
     verify_text = st.text_area("Paste the text you are verifying:", height=200)
+    manual_ts = st.text_input("Enter Timestamp from ID holder (Optional/Advanced):")
     
     if st.button("Run Verification"):
         if lookup_id and verify_text:
             try:
                 parts = lookup_id.split("-")
                 expected_short_hash = parts[2]
-                actual_hash = hashlib.sha256(verify_text.strip().encode('utf-8')).hexdigest()
+                
+                # If we have a manual timestamp, we use the Lock logic
+                if manual_ts:
+                    combined = f"{verify_text.strip()}{manual_ts}"
+                    actual_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
+                else:
+                    # Fallback to simple content hash for backwards compatibility or legacy IDs
+                    actual_hash = hashlib.sha256(verify_text.strip().encode('utf-8')).hexdigest()
+                
                 actual_short_hash = actual_hash[:6]
                 
                 if actual_short_hash == expected_short_hash:
-                    st.success(f"✅ LEGITIMATE: This text matches the Fingerprint in ID {lookup_id}")
-                    st.markdown(f'<div class="status-header"><div class="pulse"></div> CONTENT AUTHENTIC</div>', unsafe_allow_html=True)
+                    st.success(f"✅ AUTHENTIC: Matches Fingerprint {expected_short_hash}")
                 else:
-                    st.error(f"❌ TAMPERED: The text provided does not match ID {lookup_id}")
+                    st.error(f"❌ TAMPERED: Content mismatch for ID {lookup_id}")
             except:
-                st.error("Invalid ID format. Please use: 00-H-XXXXXX-2025")
+                st.error("Invalid ID format.")
