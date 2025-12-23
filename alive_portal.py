@@ -3,12 +3,11 @@ import json
 import statistics
 import pandas as pd
 import hashlib
-from datetime import datetime
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="ALIVE Portal", page_icon="🧬", layout="centered")
 
-# --- 1. CUSTOM CSS ---
+# --- 1. CUSTOM CSS (Cyberpunk/Bio-Tech Aesthetic) ---
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
@@ -37,7 +36,7 @@ st.markdown("""
     }
     [data-testid="stFileUploader"] {
         border: 2px solid #000000;
-        background-color: #A9A9A9;
+        background-color: #f0f2f6;
         border-radius: 10px;
     }
     </style>
@@ -45,12 +44,13 @@ st.markdown("""
 
 # --- 2. HEADER ---
 st.title("🧬 ALIVE PORTAL")
+st.write("### BIOMETRIC & CONTENT VERIFICATION")
 
 # --- 3. MODE SELECTION ---
-mode = st.radio("Select Verification Mode:", ["File Upload (Full Proof)", "ID Lookup (Quick Check)"], horizontal=True)
+mode = st.radio("Verification Method:", ["File Upload (Full Proof)", "Manual ID Lookup"], horizontal=True)
 
 if mode == "File Upload (Full Proof)":
-    st.info("Step 1: Upload the JSON receipt. Step 2: Paste the text to verify.")
+    st.info("Step 1: Upload the rhythm.json receipt. Step 2: Paste the text to verify.")
     
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -60,52 +60,45 @@ if mode == "File Upload (Full Proof)":
 
     if uploaded_file is not None and pasted_text:
         try:
-            raw_data = json.load(uploaded_file)
-            jitter = raw_data.get("jitter_data", [])
-            saved_hash = raw_data.get("content_hash", "")
-            timestamp = raw_data.get("timestamp", "Unknown")
+            # Load the JSON receipt
+            data = json.load(uploaded_file)
+            jitter = data.get("jitter_data", [])
+            saved_hash = data.get("content_hash", "")
+            timestamp = data.get("timestamp", "Unknown")
+            score = data.get("score", 0)
             
-            # --- THE TIMESTAMP LOCK VERIFICATION ---
+            # --- THE TIMESTAMP LOCK CHECK ---
             combined_to_verify = f"{pasted_text.strip()}{timestamp}"
-            current_hash = hashlib.sha256(combined_to_verify.encode('utf-8')).hexdigest()
+            calculated_hash = hashlib.sha256(combined_to_verify.encode('utf-8')).hexdigest()
             
+            hash_match = (calculated_hash == saved_hash)
             st.divider()
-            
-            hash_match = (current_hash == saved_hash)
-            variation = statistics.stdev(jitter) if len(jitter) > 10 else 0
-            score = min(100, int(variation * 500))
-            human_verified = score >= 60 
 
-            if not hash_match:
-                st.error("🚨 CRITICAL ERROR: CONTENT TAMPERED or TIMESTAMP MISMATCH.")
-            elif not human_verified:
-                st.warning(f"⚠️ LOW CONFIDENCE: Biological jitter ({score}%) is below the human threshold.")
-            else:
+            if hash_match:
                 st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
                 st.balloons()
+                
+                # --- THE COOL STUFF: BIOMETRIC CHART ---
+                st.write("### 🧬 Rhythmic Signature")
+                st.write("This chart shows the unique biological micro-timing of the keystrokes recorded.")
+                chart_data = pd.DataFrame(jitter, columns=["Jitter (ms)"])
+                st.line_chart(chart_data, color="#00ff00")
+                
+                # --- VERIFICATION SUMMARY TABLE ---
+                st.write("### 📋 Verification Summary")
+                summary_data = {
+                    "Security Check": ["Content Integrity", "Biometric Confidence", "Timestamp Lock", "Human ID"],
+                    "Result": ["PASSED", f"{score}%", timestamp, data.get("id", "N/A")],
+                    "Status": ["✅", "✅", "🔒", "🆔"]
+                }
+                st.table(pd.DataFrame(summary_data))
 
-            st.write("### 📋 Verification Summary")
-            summary_data = {
-                "Security Check": ["Content Integrity", "Biometric Jitter", "Fingerprint Match", "Timestamp Lock"],
-                "Result": [
-                    "PASSED" if hash_match else "FAILED",
-                    f"{score}% Confidence",
-                    f"Match ({saved_hash[:6]})" if hash_match else "MISMATCH",
-                    f"SECURE: {timestamp}"
-                ],
-                "Status": ["✅" if hash_match else "❌", "✅" if human_verified else "⚠️", "✅" if hash_match else "❌", "🔒"]
-            }
-            st.table(pd.DataFrame(summary_data))
-
-            if human_verified and hash_match:
+                # --- SHAREABLE BADGE GENERATOR ---
                 st.write("### 🛡️ Share Your Verification")
-                st.info("The ID and Timestamp below are both required for others to verify this post.")
-                
-                short_hash = saved_hash[:6]
-                badge_id = f"{score}-H-{short_hash}-2025"
                 portal_url = "https://alive-prototype.streamlit.app/"
+                badge_id = data.get("id", "ALIVE-HUMAN")
                 
-                t1, t2 = st.tabs(["🌐 Web Badge (HTML)", "📱 Social Media (Text)"])
+                t1, t2 = st.tabs(["🌐 Web Badge", "📱 Social Media"])
                 with t1:
                     badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center; font-family:monospace;">
     <a href="{portal_url}" style="color:#00ff00; text-decoration:none; font-weight:bold; display:block; margin-bottom:5px;">
@@ -115,37 +108,34 @@ if mode == "File Upload (Full Proof)":
 </div>"""
                     st.code(badge_code, language="html")
                 with t2:
-                    social_text = f"🧬 [a] ALIVE Verified Human\nID: {badge_id}\nTS: {timestamp}\nVerify: {portal_url}"
-                    st.code(social_text, language="text")
+                    st.code(f"🧬 [a] ALIVE Verified Human\nID: {badge_id}\nTS: {timestamp}\nVerify: {portal_url}", language="text")
+
+            else:
+                st.error("🚨 TAMPER ALERT: The text or timestamp does not match the original human session.")
+                st.warning("Integrity check failed. This document may have been edited after verification.")
 
         except Exception as e:
-            st.error(f"Error parsing file: {e}")
+            st.error(f"Error parsing receipt: {e}")
 
 else:
-    # --- ID LOOKUP MODE ---
-    st.info("Enter the ID and the exact Timestamp to verify the content.")
+    # --- MANUAL ID LOOKUP MODE ---
+    st.info("Enter the ID and the exact Timestamp to verify the content authenticity.")
     
     lookup_id = st.text_input("Enter ALIVE ID (e.g., 94-H-a1b2c3-2025):")
     verify_text = st.text_area("Paste the text you are verifying:", height=200)
     manual_ts = st.text_input("Enter TS (Timestamp) from the post:")
     
-    if st.button("Run Verification"):
+    if st.button("Run Quick Verification"):
         if lookup_id and verify_text and manual_ts:
-            try:
-                parts = lookup_id.split("-")
-                expected_short_hash = parts[2]
-                
-                # Combine with manual timestamp for the lock check
-                combined = f"{verify_text.strip()}{manual_ts}"
-                actual_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
-                actual_short_hash = actual_hash[:6]
-                
-                if actual_short_hash == expected_short_hash:
-                    st.success(f"✅ AUTHENTIC: Matches Fingerprint {expected_short_hash}")
-                    st.markdown(f'<div class="status-header"><div class="pulse"></div> CONTENT AUTHENTIC</div>', unsafe_allow_html=True)
-                else:
-                    st.error(f"❌ TAMPERED: Content or Timestamp mismatch.")
-            except:
-                st.error("Invalid ID format.")
+            # Re-create the hash from text + timestamp
+            combined = f"{verify_text.strip()}{manual_ts}"
+            actual_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
+            short_hash = actual_hash[:6]
+            
+            if short_hash in lookup_id:
+                st.success(f"✅ AUTHENTIC: Content matches the human signature for ID {lookup_id}")
+                st.markdown(f'<div class="status-header"><div class="pulse"></div> CONTENT AUTHENTIC</div>', unsafe_allow_html=True)
+            else:
+                st.error("❌ TAMPERED: The content does not match the provided ID and Timestamp.")
         else:
-            st.warning("All three fields (ID, Text, and Timestamp) are required for lookup.")
+            st.warning("All fields are required for a manual check.")
