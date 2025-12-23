@@ -2,137 +2,114 @@ import streamlit as st
 import json
 import statistics
 import pandas as pd
+import hashlib
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="ALIVE Portal", page_icon="🧬", layout="centered")
 
-# --- 1. CUSTOM CSS (Updated per your tweaks) ---
+# --- 1. CUSTOM CSS ---
 st.markdown("""
     <style>
-    /* Main Background and Text */
-    .stApp {
-        background-color: #ffffff;
-    }
-    
-    /* Terminal-style headers */
+    .stApp { background-color: #ffffff; }
     .status-header {
         font-family: 'Courier New', Courier, monospace;
         color: #00ff00;
         font-size: 26px;
         font-weight: bold;
         letter-spacing: 2px;
-        padding: 10px 0;
     }
-
-    /* Pulse animation for the Verified Human status */
     .pulse {
         display: inline-block;
         width: 15px;
         height: 15px;
         background: #00ff00;
         border-radius: 50%;
-        box-shadow: 0 0 0 0 rgba(0, 255, 0, 1);
+        box-shadow: 0 0 10px rgba(0, 255, 0, 1);
         animation: pulse-green 2s infinite;
         margin-right: 15px;
         vertical-align: middle;
     }
-
     @keyframes pulse-green {
         0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
         70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
         100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
     }
-
-    /* Style the File Uploader Box */
     [data-testid="stFileUploader"] {
         border: 2px solid #000000;
-        padding: 20px;
-        border-radius: 10px;
         background-color: #A9A9A9;
-    }
-
-    /* Change Button Look */
-    button[kind="secondary"] {
-        background-color: #00ff00 !important;
-        color: black !important;
-        font-family: 'Courier New', Courier, monospace;
-        font-weight: bold;
-        border-radius: 5px;
-    }
-    
-    /* Ensure metric labels are readable on white */
-    [data-testid="stMetricLabel"] {
-        color: #31333F !important;
+        border-radius: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. HEADER SECTION ---
+# --- 2. HEADER ---
 st.title("🧬 ALIVE PORTAL")
-st.write("---")
-st.write("### BIOMETRIC VERIFICATION")
-st.info("Upload your rhythm data to analyze biological jitter and confirm humanity.")
+st.write("### BIOMETRIC & CONTENT VERIFICATION")
+st.info("Step 1: Upload the JSON receipt. Step 2: Paste the text to verify.")
 
-# --- 3. THE FIX: DEFINE THE UPLOADER VARIABLE ---
-uploaded_file = st.file_uploader("Drop rhythm.json here", type=["json"])
+# --- 3. INPUTS ---
+col1, col2 = st.columns([1, 1])
 
-# --- 4. THE SCIENCE OF THE JITTER ---
-if uploaded_file is not None:
+with col1:
+    uploaded_file = st.file_uploader("Upload rhythm.json", type=["json"])
+
+with col2:
+    pasted_text = st.text_area("Paste the article/text here:", height=150)
+
+# --- 4. VERIFICATION LOGIC ---
+if uploaded_file is not None and pasted_text:
     try:
-        data = json.load(uploaded_file)
+        # Load JSON data
+        raw_data = json.load(uploaded_file)
         
-        if len(data) > 10:
-            # --- SENSITIVITY TWEAK ---
-            # variation * 500 means 0.2s stdev = 100% Human
-            # variation * 1000 would make it 2x as sensitive (0.1s = 100%)
-            variation = statistics.stdev(data)
+        # In the new version, data is in 'jitter_data' key
+        jitter = raw_data.get("jitter_data", [])
+        saved_hash = raw_data.get("content_hash", "")
+        
+        # Calculate Hash of the pasted text
+        current_hash = hashlib.sha256(pasted_text.strip().encode('utf-8')).hexdigest()
+        
+        # --- PHASE A: CONTENT INTEGRITY CHECK ---
+        st.divider()
+        if current_hash == saved_hash:
+            st.success("🔒 CONTENT INTEGRITY VERIFIED: This text matches the recorded session exactly.")
+            hash_match = True
+        else:
+            st.error("🚨 TAMPER ALERT: The pasted text does not match the digital fingerprint in this receipt.")
+            st.warning(f"Expected: {saved_hash[:10]}... | Got: {current_hash[:10]}...")
+            hash_match = False
+
+        # --- PHASE B: BIOMETRIC CHECK ---
+        if len(jitter) > 10:
+            variation = statistics.stdev(jitter)
             score = min(100, int(variation * 500)) 
             
-            # --- THE VERDICT ---
-            if score > 70:
+            if score > 70 and hash_match:
                 st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
+                st.metric(label="Humanity Confidence", value=f"{score}%")
                 
-                # Display metrics
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric(label="Humanity Confidence", value=f"{score}%", delta="UNSIMULATABLE")
-                with col2:
-                    st.metric(label="Biological Jitter", value=f"{variation:.4f}s")
-                    
-                st.success("Biological signature confirmed. Trust established.")
-                
-                # --- VISUAL PROOF (The Graph) ---
-                st.write("### 🧬 Your Biological Jitter")
-                st.write("This graph visualizes the millisecond variations in your input rhythm.")
-                chart_data = pd.DataFrame(data[:100], columns=["Rhythm (Seconds)"])
+                st.write("### 🧬 Rhythmic Signature")
+                chart_data = pd.DataFrame(jitter[:100], columns=["Jitter"])
                 st.line_chart(chart_data, color="#00ff00")
-                
-                st.divider()
 
-                # --- THE BADGE GENERATOR ---
-                st.write("### 🛡️ Get Your H-Mark Badge")
-                st.write("Copy the code below and paste it into the 'Custom HTML' block of your blog or website.")
+                # --- BADGE GENERATOR ---
+                short_hash = saved_hash[:6]
+                badge_id = f"{score}-H-{short_hash}-2025"
                 
-                my_portal_url = "https://alive-prototype.streamlit.app/" 
-                
+                st.write("### 🛡️ Verified H-Mark Badge")
                 badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center;">
-    <a href="{my_portal_url}" style="color:#00ff00; text-decoration:none; font-family:monospace; font-weight:bold;">
-        [a] ALIVE CERTIFIED HUMAN | ID: {score}-H-2025
+    <a href="https://alive-prototype.streamlit.app/" style="color:#00ff00; text-decoration:none; font-family:monospace; font-weight:bold;">
+        [a] ALIVE CERTIFIED HUMAN | ID: {badge_id}
     </a>
 </div>"""
-
                 st.code(badge_code, language="html")
-                st.write("This badge acts as a direct link back to this portal.")
                 st.balloons()
-                
-            else:
-                st.error(f"LOW CONFIDENCE ({score}%): No biological jitter detected.")
-                st.warning("Analysis suggests automated input. Ensure you are providing raw rhythm data.")
-                
+            elif hash_match:
+                st.warning("Content matches, but biological jitter is too low. Possible AI-assisted input.")
         else:
-            st.warning("Data sample too small. Please provide at least 11 data points for a valid signature.")
-            
+            st.info("Biometric data stream is too short for a confidence score.")
+
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"Error parsing verification file: {e}")
 else:
-    st.write("Waiting for data stream... 📡")
+    st.write("📡 Waiting for both Receipt and Content for full verification...")
