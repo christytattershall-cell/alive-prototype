@@ -6,7 +6,7 @@ import pandas as pd
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="ALIVE Portal", page_icon="🧬", layout="centered")
 
-# --- 1. CUSTOM CSS (The Cyber Aesthetic) ---
+# --- 1. CUSTOM CSS (Updated per your tweaks) ---
 st.markdown("""
     <style>
     /* Main Background and Text */
@@ -34,6 +34,7 @@ st.markdown("""
         box-shadow: 0 0 0 0 rgba(0, 255, 0, 1);
         animation: pulse-green 2s infinite;
         margin-right: 15px;
+        vertical-align: middle;
     }
 
     @keyframes pulse-green {
@@ -58,6 +59,11 @@ st.markdown("""
         font-weight: bold;
         border-radius: 5px;
     }
+    
+    /* Ensure metric labels are readable on white */
+    [data-testid="stMetricLabel"] {
+        color: #31333F !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -68,66 +74,65 @@ st.write("### BIOMETRIC VERIFICATION")
 st.info("Upload your rhythm data to analyze biological jitter and confirm humanity.")
 
 # --- 3. THE FIX: DEFINE THE UPLOADER VARIABLE ---
-# This ensures 'uploaded_file' exists before we try to use it.
 uploaded_file = st.file_uploader("Drop rhythm.json here", type=["json"])
 
 # --- 4. THE SCIENCE OF THE JITTER ---
 if uploaded_file is not None:
-    # Load the data from the uploaded JSON
-    data = json.load(uploaded_file)
-    
-    if len(data) > 10:
-        # Calculate variation (Our 'Humanity' metric)
-        # Human movement/typing has subtle, irregular gaps that AI lacks.
-        variation = statistics.stdev(data)
-        score = min(100, int(variation * 500)) 
+    try:
+        data = json.load(uploaded_file)
         
-        # --- THE VERDICT ---
-        if score > 70:
-            st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
+        if len(data) > 10:
+            # --- SENSITIVITY TWEAK ---
+            # variation * 500 means 0.2s stdev = 100% Human
+            # variation * 1000 would make it 2x as sensitive (0.1s = 100%)
+            variation = statistics.stdev(data)
+            score = min(100, int(variation * 500)) 
             
-            # Display metrics
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric(label="Humanity Confidence", value=f"{score}%", delta="UNSIMULATABLE")
-            with col2:
-                st.metric(label="Biological Jitter", value=f"{variation:.4f}s")
+            # --- THE VERDICT ---
+            if score > 70:
+                st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
                 
-            st.success("Biological signature confirmed. Trust established.")
-            
-            # --- VISUAL PROOF (The Graph) ---
-            st.write("### 🧬 Your Biological Jitter")
-            st.write("This graph visualizes the millisecond variations in your input rhythm.")
-            chart_data = pd.DataFrame(data[:100], columns=["Rhythm (Seconds)"])
-            st.line_chart(chart_data, color="#00ff00")
-            
-            st.divider()
+                # Display metrics
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric(label="Humanity Confidence", value=f"{score}%", delta="UNSIMULATABLE")
+                with col2:
+                    st.metric(label="Biological Jitter", value=f"{variation:.4f}s")
+                    
+                st.success("Biological signature confirmed. Trust established.")
+                
+                # --- VISUAL PROOF (The Graph) ---
+                st.write("### 🧬 Your Biological Jitter")
+                st.write("This graph visualizes the millisecond variations in your input rhythm.")
+                chart_data = pd.DataFrame(data[:100], columns=["Rhythm (Seconds)"])
+                st.line_chart(chart_data, color="#00ff00")
+                
+                st.divider()
 
-            # --- THE BADGE GENERATOR ---
-            st.write("### 🛡️ Get Your H-Mark Badge")
-            st.write("Copy the code below and paste it into the 'Custom HTML' block of your blog or website.")
-            
-            # CHANGE THIS URL to your actual live Streamlit link!
-            my_portal_url = "https://alive-prototype.streamlit.app/" 
-            
-            badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center;">
+                # --- THE BADGE GENERATOR ---
+                st.write("### 🛡️ Get Your H-Mark Badge")
+                st.write("Copy the code below and paste it into the 'Custom HTML' block of your blog or website.")
+                
+                my_portal_url = "https://alive-prototype.streamlit.app/" 
+                
+                badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center;">
     <a href="{my_portal_url}" style="color:#00ff00; text-decoration:none; font-family:monospace; font-weight:bold;">
         [a] ALIVE CERTIFIED HUMAN | ID: {score}-H-2025
     </a>
 </div>"""
 
-            # This shows the box they can copy
-            st.code(badge_code, language="html")
-            
-            st.write("This badge acts as a direct link back to this portal, proving to your readers that this specific post was authored by a human.")
-            st.balloons()
-            
+                st.code(badge_code, language="html")
+                st.write("This badge acts as a direct link back to this portal.")
+                st.balloons()
+                
+            else:
+                st.error(f"LOW CONFIDENCE ({score}%): No biological jitter detected.")
+                st.warning("Analysis suggests automated input. Ensure you are providing raw rhythm data.")
+                
         else:
-            st.error("LOW CONFIDENCE: No biological jitter detected. Analysis suggests automated input.")
-            st.warning("Ensure you are providing raw, unedited rhythm data.")
+            st.warning("Data sample too small. Please provide at least 11 data points for a valid signature.")
             
-    else:
-        st.info("The receipt is too small. Provide a larger data sample to generate more rhythm data!")
+    except Exception as e:
+        st.error(f"Error processing file: {e}")
 else:
-    # This shows when no file is uploaded yet
     st.write("Waiting for data stream... 📡")
