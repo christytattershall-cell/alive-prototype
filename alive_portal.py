@@ -11,7 +11,7 @@ st.markdown("""
     <style>
     /* Main Background and Text */
     .stApp {
-        background-color: #000000;
+        background-color: #ffffff;
     }
     
     /* Terminal-style headers */
