@@ -11,7 +11,7 @@ st.markdown("""
     <style>
     /* Main Background and Text */
     .stApp {
-        background-color: #0e1117;
+        background-color: #000000;
     }
     
     /* Terminal-style headers */
@@ -64,7 +64,7 @@ st.markdown("""
 # --- 2. HEADER SECTION ---
 st.title("🧬 ALIVE PORTAL")
 st.write("---")
-st.write("### [SYSTEM INTERFACE] BIOMETRIC VERIFICATION")
+st.write("### BIOMETRIC VERIFICATION")
 st.info("Upload your rhythm data to analyze biological jitter and confirm humanity.")
 
 # --- 3. THE FIX: DEFINE THE UPLOADER VARIABLE ---
