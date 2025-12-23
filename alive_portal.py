@@ -76,7 +76,7 @@ if uploaded_file is not None and pasted_text:
             hash_match = True
         else:
             st.error("🚨 TAMPER ALERT: The pasted text does not match the digital fingerprint in this receipt.")
-            st.warning(f"Expected: {saved_hash[:10]}... | Got: {current_hash[:10]}...")
+            st.warning(f"Expected Hash: {saved_hash[:10]}... | Current Hash: {current_hash[:10]}...")
             hash_match = False
 
         # --- PHASE B: BIOMETRIC CHECK ---
@@ -92,17 +92,30 @@ if uploaded_file is not None and pasted_text:
                 chart_data = pd.DataFrame(jitter[:100], columns=["Jitter"])
                 st.line_chart(chart_data, color="#00ff00")
 
-                # --- BADGE GENERATOR ---
+                # --- NEW MULTI-PLATFORM BADGE GENERATOR ---
+                st.write("### 🛡️ Share Your Verification")
+                st.write("Choose the format that fits your platform.")
+                
                 short_hash = saved_hash[:6]
                 badge_id = f"{score}-H-{short_hash}-2025"
+                portal_url = "https://alive-prototype.streamlit.app/"
                 
-                st.write("### 🛡️ Verified H-Mark Badge")
-                badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center;">
-    <a href="https://alive-prototype.streamlit.app/" style="color:#00ff00; text-decoration:none; font-family:monospace; font-weight:bold;">
+                tab1, tab2 = st.tabs(["🌐 Web Badge (HTML)", "📱 Social Media (Text)"])
+                
+                with tab1:
+                    st.write("Copy this into the HTML of your blog or website:")
+                    badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center;">
+    <a href="{portal_url}" style="color:#00ff00; text-decoration:none; font-family:monospace; font-weight:bold;">
         [a] ALIVE CERTIFIED HUMAN | ID: {badge_id}
     </a>
 </div>"""
-                st.code(badge_code, language="html")
+                    st.code(badge_code, language="html")
+
+                with tab2:
+                    st.write("Copy this into your social media post description:")
+                    social_text = f"🧬 [a] ALIVE Verified Human\nID: {badge_id}\nVerify at: {portal_url}"
+                    st.code(social_text, language="text")
+                
                 st.balloons()
             elif hash_match:
                 st.warning("Content matches, but biological jitter is too low. Possible AI-assisted input.")
