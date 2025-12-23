@@ -78,12 +78,6 @@ if mode == "File Upload (Full Proof)":
                 st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
                 st.balloons()
                 
-                # --- THE COOL STUFF: BIOMETRIC CHART ---
-                st.write("### 🧬 Rhythmic Signature")
-                st.write("This chart shows the unique biological micro-timing of the keystrokes recorded.")
-                chart_data = pd.DataFrame(jitter, columns=["Jitter (ms)"])
-                st.line_chart(chart_data, color="#00ff00")
-                
                 # --- VERIFICATION SUMMARY TABLE ---
                 st.write("### 📋 Verification Summary")
                 summary_data = {
@@ -92,6 +86,13 @@ if mode == "File Upload (Full Proof)":
                     "Status": ["✅", "✅", "🔒", "🆔"]
                 }
                 st.table(pd.DataFrame(summary_data))
+
+                # --- THE COOL STUFF: BIOMETRIC CHART ---
+                st.write("### 🧬 Rhythmic Signature")
+                st.write("This chart shows the unique biological micro-timing of the keystrokes recorded.")
+                chart_data = pd.DataFrame(jitter, columns=["Jitter (ms)"])
+                st.line_chart(chart_data, color="#00ff00")
+                
 
                 # --- SHAREABLE BADGE GENERATOR ---
                 st.write("### 🛡️ Share Your Verification")
