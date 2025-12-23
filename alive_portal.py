@@ -40,11 +40,6 @@ st.markdown("""
         background-color: #A9A9A9;
         border-radius: 10px;
     }
-    .cert-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: monospace;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -74,18 +69,24 @@ if mode == "File Upload (Full Proof)":
             
             st.divider()
             
-            # Checks
+            # --- CALCULATE SCORES ---
             hash_match = current_hash == saved_hash
             variation = statistics.stdev(jitter) if len(jitter) > 10 else 0
+            
+            # Adjusted multiplier for better sensitivity
             score = min(100, int(variation * 500))
-            human_verified = score > 70
+            
+            # New thresholds: 60+ is Human, 80+ is High Confidence
+            human_verified = score >= 60 
 
-            # --- VERDICT ---
-            if hash_match and human_verified:
+            # --- VERDICT LOGIC ---
+            if not hash_match:
+                st.error("🚨 CRITICAL ERROR: CONTENT TAMPERED. The text does not match this receipt.")
+            elif not human_verified:
+                st.warning(f"⚠️ LOW CONFIDENCE: Biological jitter ({score}%) is below the human threshold.")
+            else:
                 st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
                 st.balloons()
-            else:
-                st.error("⚠️ VERIFICATION FAILED: Critical mismatch detected.")
 
             # --- VERIFICATION SUMMARY TABLE ---
             st.write("### 📋 Verification Summary")
@@ -97,7 +98,12 @@ if mode == "File Upload (Full Proof)":
                     f"Match ({saved_hash[:6]})" if hash_match else "MISMATCH",
                     timestamp
                 ],
-                "Status": ["✅" if hash_match else "❌", "✅" if human_verified else "❌", "✅" if hash_match else "❌", "ℹ️"]
+                "Status": [
+                    "✅" if hash_match else "❌", 
+                    "✅" if human_verified else "⚠️", 
+                    "✅" if hash_match else "❌", 
+                    "ℹ️"
+                ]
             }
             st.table(pd.DataFrame(summary_data))
 
@@ -119,20 +125,17 @@ if mode == "File Upload (Full Proof)":
             st.error(f"Error parsing file: {e}")
 
 else:
-    # --- ID LOOKUP MODE ---
-    st.info("Enter the ALIVE ID found on the post and the text content to verify legitimacy.")
+    # --- ID LOOKUP MODE (Manual Fingerprint Check) ---
+    st.info("Enter the ALIVE ID and the text content to verify legitimacy.")
     
     lookup_id = st.text_input("Enter ALIVE ID (e.g., 94-H-a1b2c3-2025):")
     verify_text = st.text_area("Paste the text you are verifying:", height=200)
     
     if st.button("Run Verification"):
         if lookup_id and verify_text:
-            # 1. Extract the hash from the ID
             try:
                 parts = lookup_id.split("-")
                 expected_short_hash = parts[2]
-                
-                # 2. Hash the pasted text
                 actual_hash = hashlib.sha256(verify_text.strip().encode('utf-8')).hexdigest()
                 actual_short_hash = actual_hash[:6]
                 
@@ -141,6 +144,5 @@ else:
                     st.markdown(f'<div class="status-header"><div class="pulse"></div> CONTENT AUTHENTIC</div>', unsafe_allow_html=True)
                 else:
                     st.error(f"❌ TAMPERED: The text provided does not match ID {lookup_id}")
-                    st.write(f"This ID was generated for a different version of this text.")
             except:
-                st.error("Invalid ID format. Please use the format: 00-H-XXXXXX-2025")
+                st.error("Invalid ID format. Please use: 00-H-XXXXXX-2025")
