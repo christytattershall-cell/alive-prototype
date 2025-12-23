@@ -47,7 +47,7 @@ st.markdown("""
         border: 2px dashed #00ff00;
         padding: 20px;
         border-radius: 10px;
-        background-color: #1a1c24;
+        background-color: #A9A9A9;
     }
 
     /* Change Button Look */
