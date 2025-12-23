@@ -44,7 +44,7 @@ st.markdown("""
 
     /* Style the File Uploader Box */
     [data-testid="stFileUploader"] {
-        border: 2px dashed #00ff00;
+        border: 2px solid #000000;
         padding: 20px;
         border-radius: 10px;
         background-color: #A9A9A9;
