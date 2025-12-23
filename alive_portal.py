@@ -1,142 +1,148 @@
-import streamlit as st
+import customtkinter as ctk
+from pynput import keyboard
 import json
+import time
+import threading
+import hashlib 
 import statistics
-import pandas as pd
-import hashlib
+from pathlib import Path
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="ALIVE Portal", page_icon="🧬", layout="centered")
+# --- STRIPE COLOR PALETTE ---
+STRIPE_BLUE = "#635bff"
+STRIPE_SLATE = "#424770"
+STRIPE_DARK = "#1a1f36"
+STRIPE_LIGHT_BG = "#f6f9fc"
+STRIPE_WHITE = "#ffffff"
+STRIPE_BORDER = "#e6ebf1"
 
-# --- 1. CUSTOM CSS (Cyberpunk/Bio-Tech Aesthetic) ---
-st.markdown("""
-    <style>
-    .stApp { background-color: #ffffff; }
-    .status-header {
-        font-family: 'Courier New', Courier, monospace;
-        color: #00ff00;
-        font-size: 26px;
-        font-weight: bold;
-        letter-spacing: 2px;
-    }
-    .pulse {
-        display: inline-block;
-        width: 15px;
-        height: 15px;
-        background: #00ff00;
-        border-radius: 50%;
-        box-shadow: 0 0 10px rgba(0, 255, 0, 1);
-        animation: pulse-green 2s infinite;
-        margin-right: 15px;
-        vertical-align: middle;
-    }
-    @keyframes pulse-green {
-        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
-        70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
-        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
-    }
-    [data-testid="stFileUploader"] {
-        border: 2px solid #000000;
-        background-color: #f0f2f6;
-        border-radius: 10px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+class AliveAgentApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-# --- 2. HEADER ---
-st.title("🧬 ALIVE PORTAL")
-st.write("### BIOMETRIC & CONTENT VERIFICATION")
+        # --- Window Setup ---
+        self.title("Alive Agent")
+        self.geometry("480x620") 
+        ctk.set_appearance_mode("light") # Stripe aesthetic is famously light
+        self.configure(fg_color=STRIPE_LIGHT_BG)
+        
+        # --- Variables ---
+        self.recording = False
+        self.deltas = []
+        self.last_time = None
 
-# --- 3. MODE SELECTION ---
-mode = st.radio("Verification Method:", ["File Upload (Full Proof)", "Manual ID Lookup"], horizontal=True)
+        # --- HEADER SECTION ---
+        self.header_frame = ctk.CTkFrame(self, fg_color=STRIPE_WHITE, corner_radius=0, height=80)
+        self.header_frame.pack(fill="x", side="top")
+        
+        self.title_label = ctk.CTkLabel(
+            self.header_frame, 
+            text="Alive", 
+            font=("Segoe UI", 26, "bold"), 
+            text_color=STRIPE_DARK
+        )
+        self.title_label.place(relx=0.08, rely=0.5, anchor="w")
 
-if mode == "File Upload (Full Proof)":
-    st.info("Step 1: Upload the rhythm.json receipt. Step 2: Paste the text to verify.")
-    
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        uploaded_file = st.file_uploader("Upload rhythm.json", type=["json"])
-    with col2:
-        pasted_text = st.text_area("Paste the article/text here:", height=150)
+        # --- STATUS INDICATOR ---
+        self.status_pill = ctk.CTkFrame(self, fg_color=STRIPE_BORDER, corner_radius=20, height=30)
+        self.status_pill.pack(pady=(30, 10))
+        
+        self.status_text = ctk.CTkLabel(
+            self.status_pill, 
+            text="● SYSTEM IDLE", 
+            font=("Segoe UI", 12, "bold"), 
+            text_color=STRIPE_SLATE
+        )
+        self.status_text.pack(padx=15)
 
-    if uploaded_file is not None and pasted_text:
-        try:
-            # Load the JSON receipt
-            data = json.load(uploaded_file)
-            jitter = data.get("jitter_data", [])
-            saved_hash = data.get("content_hash", "")
-            timestamp = data.get("timestamp", "Unknown")
-            score = data.get("score", 0)
-            
-            # --- THE TIMESTAMP LOCK CHECK ---
-            combined_to_verify = f"{pasted_text.strip()}{timestamp}"
-            calculated_hash = hashlib.sha256(combined_to_verify.encode('utf-8')).hexdigest()
-            
-            hash_match = (calculated_hash == saved_hash)
-            st.divider()
+        # --- MAIN ACTION AREA ---
+        self.container = ctk.CTkFrame(self, fg_color=STRIPE_WHITE, corner_radius=12, border_color=STRIPE_BORDER, border_width=1)
+        self.container.pack(pady=10, padx=30, fill="both", expand=True)
 
-            if hash_match:
-                st.markdown(f'<div class="status-header"><div class="pulse"></div> STATUS: VERIFIED HUMAN</div>', unsafe_allow_html=True)
-                st.balloons()
-                
-                # --- VERIFICATION SUMMARY TABLE ---
-                st.write("### 📋 Verification Summary")
-                summary_data = {
-                    "Security Check": ["Content Integrity", "Biometric Confidence", "Timestamp Lock", "Human ID"],
-                    "Result": ["PASSED", f"{score}%", timestamp, data.get("id", "N/A")],
-                    "Status": ["✅", "✅", "🔒", "🆔"]
-                }
-                st.table(pd.DataFrame(summary_data))
+        self.btn_label = ctk.CTkLabel(self.container, text="Biometric Session", font=("Segoe UI", 14, "bold"), text_color=STRIPE_DARK)
+        self.btn_label.pack(pady=(20, 10))
 
-                # --- THE COOL STUFF: BIOMETRIC CHART ---
-                st.write("### 🧬 Rhythmic Signature")
-                st.write("This chart shows the unique biological micro-timing of the keystrokes recorded.")
-                chart_data = pd.DataFrame(jitter, columns=["Jitter (ms)"])
-                st.line_chart(chart_data, color="#00ff00")
-                
+        self.toggle_button = ctk.CTkButton(
+            self.container, 
+            text="Start Recording", 
+            fg_color=STRIPE_BLUE, 
+            hover_color="#544dc0",
+            font=("Segoe UI", 14, "bold"),
+            height=45,
+            width=200,
+            corner_radius=8,
+            command=self.toggle_recording
+        )
+        self.toggle_button.pack(pady=10)
 
-                # --- SHAREABLE BADGE GENERATOR ---
-                st.write("### 🛡️ Share Your Verification")
-                portal_url = "https://alive-prototype.streamlit.app/"
-                badge_id = data.get("id", "ALIVE-HUMAN")
-                
-                t1, t2 = st.tabs(["🌐 Web Badge", "📱 Social Media"])
-                with t1:
-                    badge_code = f"""<div style="padding:15px; border:2px solid #00ff00; border-radius:10px; background-color:#1a1c24; text-align:center; font-family:monospace;">
-    <a href="{portal_url}" style="color:#00ff00; text-decoration:none; font-weight:bold; display:block; margin-bottom:5px;">
-        [a] ALIVE CERTIFIED HUMAN | ID: {badge_id}
-    </a>
-    <span style="color:#888; font-size:10px;">TS: {timestamp}</span>
-</div>"""
-                    st.code(badge_code, language="html")
-                with t2:
-                    st.code(f"🧬 [a] ALIVE Verified Human\nID: {badge_id}\nTS: {timestamp}\nVerify: {portal_url}", language="text")
+        # --- CONTENT FINGERPRINTING SECTION ---
+        self.text_label = ctk.CTkLabel(self.container, text="Document Content", font=("Segoe UI", 13, "bold"), text_color=STRIPE_SLATE)
+        self.text_label.pack(pady=(20, 5))
+        
+        self.textbox = ctk.CTkTextbox(
+            self.container, 
+            width=360, 
+            height=160, 
+            fg_color="#fcfdff", 
+            border_color=STRIPE_BORDER, 
+            border_width=1,
+            corner_radius=8,
+            font=("Segoe UI", 13),
+            text_color=STRIPE_DARK
+        )
+        self.textbox.pack(pady=10, padx=20)
 
-            else:
-                st.error("🚨 TAMPER ALERT: The text or timestamp does not match the original human session.")
-                st.warning("Integrity check failed. This document may have been edited after verification.")
+        # --- FOOTER ---
+        self.save_label = ctk.CTkLabel(self, text="Ready to secure your session.", font=("Segoe UI", 12), text_color="#a3acb9")
+        self.save_label.pack(pady=20)
 
-        except Exception as e:
-            st.error(f"Error parsing receipt: {e}")
+    # [Logic remains the same to preserve the "Unbreakable" functionality]
+    def on_release(self, key):
+        if not self.recording: return False 
+        now = time.time()
+        if self.last_time:
+            delta = now - self.last_time
+            if delta < 3.0: self.deltas.append(round(delta, 4))
+        self.last_time = now
 
-else:
-    # --- MANUAL ID LOOKUP MODE ---
-    st.info("Enter the ID and the exact Timestamp to verify the content authenticity.")
-    
-    lookup_id = st.text_input("Enter ALIVE ID (e.g., 94-H-a1b2c3-2025):")
-    verify_text = st.text_area("Paste the text you are verifying:", height=200)
-    manual_ts = st.text_input("Enter TS (Timestamp) from the post:")
-    
-    if st.button("Run Quick Verification"):
-        if lookup_id and verify_text and manual_ts:
-            # Re-create the hash from text + timestamp
-            combined = f"{verify_text.strip()}{manual_ts}"
-            actual_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
-            short_hash = actual_hash[:6]
-            
-            if short_hash in lookup_id:
-                st.success(f"✅ AUTHENTIC: Content matches the human signature for ID {lookup_id}")
-                st.markdown(f'<div class="status-header"><div class="pulse"></div> CONTENT AUTHENTIC</div>', unsafe_allow_html=True)
-            else:
-                st.error("❌ TAMPERED: The content does not match the provided ID and Timestamp.")
+    def start_background_listener(self):
+        with keyboard.Listener(on_release=self.on_release) as self.listener:
+            self.listener.join()
+
+    def toggle_recording(self):
+        if not self.recording:
+            self.recording = True
+            self.deltas, self.last_time = [], None
+            self.toggle_button.configure(text="Stop & Seal", fg_color="#e5424d", hover_color="#c03740")
+            self.status_text.configure(text="● SESSION ACTIVE", text_color=STRIPE_BLUE)
+            threading.Thread(target=self.start_background_listener, daemon=True).start()
         else:
-            st.warning("All fields are required for a manual check.")
+            self.recording = False
+            self.toggle_button.configure(text="Start Recording", fg_color=STRIPE_BLUE, hover_color="#544dc0")
+            self.status_text.configure(text="● IDLE", text_color=STRIPE_SLATE)
+            self.save_data()
+
+    def save_data(self):
+        raw_text = self.textbox.get("0.0", "end").strip()
+        if len(self.deltas) > 10 and len(raw_text) > 0:
+            ts = time.ctime() 
+            combined = f"{raw_text}{ts}"
+            content_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
+            variation = statistics.stdev(self.deltas)
+            score = min(100, int(variation * 500))
+            payload = {
+                "id": f"{score}-H-{content_hash[:6]}-2025",
+                "content_hash": content_hash,
+                "jitter_data": self.deltas,
+                "timestamp": ts,
+                "score": score
+            }
+            download_path = Path.home() / "Downloads" / "rhythm.json"
+            with open(download_path, "w") as f:
+                json.dump(payload, f)
+            self.save_label.configure(text=f"Session Sealed: {payload['id']}", text_color=STRIPE_BLUE)
+        else:
+            self.save_label.configure(text="Capture more data to seal.", text_color="#e5424d")
+
+if __name__ == "__main__":
+    app = AliveAgentApp()
+    app.mainloop()
